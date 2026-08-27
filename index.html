@@ -1,0 +1,1440 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#08090d">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2 28 9v14L16 30 4 23V9z' fill='%236D28D9'/%3E%3Cpath d='M16 9v14M9 16h14' stroke='%23f4f1ff' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+  <meta name="description" content="在浏览器中生成 Ed25519 密钥，并逐步理解 Technocore did:key 身份。">
+  <title>Technocore DID 交互式演示 / Interactive DID Playground</title>
+  <style>
+    :root {
+      --bg: #08090d;
+      --bg-soft: #0c0d13;
+      --panel: rgba(16, 17, 24, 0.9);
+      --panel-strong: #12131b;
+      --line: rgba(255, 255, 255, 0.095);
+      --line-strong: rgba(255, 255, 255, 0.17);
+      --text: #f4f1ff;
+      --muted: #9d9aab;
+      --muted-2: #747180;
+      --violet: #7c3aed;
+      --violet-deep: #6d28d9;
+      --violet-soft: #a78bfa;
+      --warm: #f4a261;
+      --green: #46d6a7;
+      --red: #ff6b76;
+      --radius: 18px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 78% -10%, rgba(109, 40, 217, 0.19), transparent 31rem),
+        radial-gradient(circle at 3% 34%, rgba(244, 162, 97, 0.055), transparent 27rem),
+        var(--bg);
+      font-family: var(--sans);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+      background-size: 44px 44px;
+      mask-image: linear-gradient(to bottom, black, transparent 84%);
+    }
+
+    button, input, textarea { font: inherit; }
+
+    button { color: inherit; }
+
+    a { color: inherit; }
+
+    ::selection { background: rgba(124, 58, 237, 0.55); color: white; }
+
+    .container {
+      width: min(1160px, calc(100% - 40px));
+      margin-inline: auto;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 74px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 11px;
+      color: var(--text);
+      text-decoration: none;
+      letter-spacing: -0.02em;
+      font-weight: 730;
+    }
+
+    .brand-mark {
+      position: relative;
+      width: 26px;
+      height: 26px;
+      border: 1px solid rgba(167, 139, 250, 0.62);
+      border-radius: 7px;
+      background: linear-gradient(145deg, rgba(124, 58, 237, 0.8), rgba(109, 40, 217, 0.22));
+      box-shadow: 0 0 22px rgba(124, 58, 237, 0.3), inset 0 0 12px rgba(255, 255, 255, 0.08);
+      transform: rotate(8deg);
+    }
+
+    .brand-mark::before,
+    .brand-mark::after {
+      content: "";
+      position: absolute;
+      background: rgba(255, 255, 255, 0.86);
+      border-radius: 999px;
+    }
+
+    .brand-mark::before { width: 10px; height: 2px; left: 7px; top: 8px; }
+    .brand-mark::after { width: 2px; height: 10px; left: 11px; top: 7px; }
+
+    .top-meta {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .online-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      margin-right: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 10px rgba(70, 214, 167, 0.65);
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
+      gap: 46px;
+      align-items: center;
+      min-height: 620px;
+      padding: 92px 0 78px;
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 22px;
+      color: var(--violet-soft);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 28px;
+      height: 1px;
+      background: currentColor;
+      box-shadow: 0 0 10px currentColor;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+
+    h1 {
+      max-width: 790px;
+      margin-bottom: 24px;
+      font-size: clamp(44px, 6.5vw, 80px);
+      line-height: 1.01;
+      letter-spacing: -0.06em;
+      font-weight: 760;
+    }
+
+    .gradient-text {
+      color: transparent;
+      background: linear-gradient(104deg, #ffffff 4%, #c4b5fd 57%, #f4a261 116%);
+      background-clip: text;
+      -webkit-background-clip: text;
+    }
+
+    .hero-copy {
+      max-width: 650px;
+      margin-bottom: 32px;
+      color: #c3bfcc;
+      font-size: 18px;
+      line-height: 1.75;
+    }
+
+    .en {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 0.83em;
+      line-height: 1.55;
+    }
+
+    .primary-button,
+    .secondary-button,
+    .copy-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      min-height: 44px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 690;
+      transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, opacity 160ms ease;
+    }
+
+    .primary-button {
+      min-height: 57px;
+      padding: 0 24px;
+      color: white;
+      background: linear-gradient(135deg, var(--violet), var(--violet-deep));
+      box-shadow: 0 14px 38px rgba(109, 40, 217, 0.27), inset 0 1px rgba(255, 255, 255, 0.18);
+      font-size: 16px;
+    }
+
+    .primary-button:hover:not(:disabled),
+    .secondary-button:hover:not(:disabled),
+    .copy-button:hover:not(:disabled) { transform: translateY(-2px); }
+
+    .primary-button:focus-visible,
+    .secondary-button:focus-visible,
+    .copy-button:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible {
+      outline: 3px solid rgba(167, 139, 250, 0.36);
+      outline-offset: 2px;
+    }
+
+    button:disabled { opacity: 0.42; cursor: not-allowed; }
+
+    .button-arrow { font-family: var(--mono); font-size: 18px; transition: transform 160ms ease; }
+    .primary-button:hover .button-arrow { transform: translateX(3px); }
+
+    .compat-note {
+      display: none;
+      max-width: 640px;
+      margin-top: 18px;
+      padding: 13px 15px;
+      border: 1px solid rgba(255, 107, 118, 0.32);
+      border-radius: 10px;
+      color: #ffc2c7;
+      background: rgba(255, 107, 118, 0.075);
+      font-size: 13px;
+    }
+
+    .compat-note.visible { display: block; }
+
+    .hero-proof {
+      position: relative;
+      padding: 1px;
+      border-radius: 22px;
+      background: linear-gradient(145deg, rgba(167, 139, 250, 0.48), rgba(255, 255, 255, 0.055) 45%, rgba(244, 162, 97, 0.25));
+      box-shadow: 0 30px 70px rgba(0, 0, 0, 0.35);
+      transform: rotate(1.2deg);
+    }
+
+    .hero-proof::before {
+      content: "";
+      position: absolute;
+      inset: 13% 8%;
+      z-index: -1;
+      background: rgba(109, 40, 217, 0.34);
+      filter: blur(50px);
+    }
+
+    .proof-inner {
+      min-height: 395px;
+      padding: 24px;
+      overflow: hidden;
+      border-radius: 21px;
+      background: #0d0e14;
+    }
+
+    .window-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted-2);
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .window-dots { display: flex; gap: 6px; }
+    .window-dots i { width: 7px; height: 7px; border-radius: 50%; background: #333541; }
+    .window-dots i:first-child { background: var(--warm); }
+
+    .fingerprint {
+      display: grid;
+      grid-template-columns: repeat(9, 1fr);
+      gap: 6px;
+      margin: 36px 0 34px;
+    }
+
+    .fingerprint span {
+      aspect-ratio: 1;
+      border-radius: 3px;
+      background: #242631;
+    }
+
+    .fingerprint span:nth-child(3n + 1),
+    .fingerprint span:nth-child(7n) { background: rgba(124, 58, 237, 0.78); box-shadow: 0 0 11px rgba(124, 58, 237, 0.28); }
+    .fingerprint span:nth-child(11n) { background: rgba(244, 162, 97, 0.75); }
+
+    .proof-label { margin-bottom: 6px; color: var(--muted-2); font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; }
+    .proof-did { margin: 0; overflow-wrap: anywhere; color: #ded8f7; font-family: var(--mono); font-size: 13px; line-height: 1.7; }
+
+    .proof-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 25px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .proof-status { color: var(--green); font-family: var(--mono); }
+
+    section { scroll-margin-top: 24px; }
+
+    .section-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 28px;
+      margin-bottom: 30px;
+    }
+
+    .section-kicker {
+      margin-bottom: 10px;
+      color: var(--violet-soft);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    h2 {
+      margin-bottom: 0;
+      font-size: clamp(30px, 4vw, 45px);
+      line-height: 1.15;
+      letter-spacing: -0.04em;
+    }
+
+    .section-summary {
+      max-width: 440px;
+      margin-bottom: 2px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .learn { padding: 38px 0 104px; }
+
+    .learn-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+
+    .learn-card {
+      min-height: 240px;
+      padding: 26px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, rgba(18, 19, 27, 0.93), rgba(12, 13, 19, 0.76));
+    }
+
+    .learn-index {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      margin-bottom: 33px;
+      border: 1px solid rgba(167, 139, 250, 0.25);
+      border-radius: 9px;
+      color: var(--violet-soft);
+      background: rgba(124, 58, 237, 0.08);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .learn-card h3 { margin-bottom: 12px; font-size: 18px; letter-spacing: -0.02em; }
+    .learn-card p { margin-bottom: 0; color: #aaa7b3; font-size: 14px; }
+
+    .derivation { padding: 98px 0; border-top: 1px solid var(--line); }
+
+    .test-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-bottom: 19px;
+    }
+
+    .test-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.018);
+      font-family: var(--mono);
+      font-size: 10px;
+    }
+
+    .test-chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #4a4b54; }
+    .test-chip.pass { color: #a7edd5; border-color: rgba(70, 214, 167, 0.22); }
+    .test-chip.pass::before { background: var(--green); box-shadow: 0 0 8px rgba(70, 214, 167, 0.5); }
+    .test-chip.fail { color: #ffc2c7; border-color: rgba(255, 107, 118, 0.28); }
+    .test-chip.fail::before { background: var(--red); }
+
+    .pipeline {
+      position: relative;
+      display: grid;
+      gap: 12px;
+    }
+
+    .step-card {
+      position: relative;
+      display: grid;
+      grid-template-columns: 92px minmax(0, 1fr);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(14, 15, 21, 0.8);
+      transition: border-color 220ms ease, background 220ms ease;
+    }
+
+    .step-card.ready { border-color: rgba(167, 139, 250, 0.24); background: rgba(17, 16, 26, 0.9); }
+
+    .step-rail {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 24px 16px;
+      border-right: 1px solid var(--line);
+    }
+
+    .step-number {
+      color: var(--violet-soft);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .step-rail-label {
+      color: var(--muted-2);
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      writing-mode: vertical-rl;
+    }
+
+    .step-content { min-width: 0; padding: 24px 26px 27px; }
+
+    .step-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 10px;
+    }
+
+    .step-content h3 { margin: 0; font-size: 17px; }
+
+    .badge {
+      flex: none;
+      padding: 4px 8px;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.025);
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .step-description { margin-bottom: 16px; color: var(--muted); font-size: 13px; }
+
+    .value-box {
+      position: relative;
+      min-height: 54px;
+      padding: 15px 16px;
+      overflow-wrap: anywhere;
+      border: 1px solid rgba(255, 255, 255, 0.075);
+      border-radius: 10px;
+      color: #d9d3ed;
+      background: #090a0f;
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.75;
+    }
+
+    .value-box.placeholder { color: #575762; }
+    .prefix-byte { color: var(--warm); font-weight: 760; }
+
+    .final-card {
+      border-color: rgba(124, 58, 237, 0.31);
+      background: linear-gradient(125deg, rgba(25, 17, 44, 0.92), rgba(14, 15, 21, 0.94));
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+    }
+
+    .final-did-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .final-did {
+      display: flex;
+      align-items: center;
+      min-height: 76px;
+      padding: 17px 18px;
+      overflow-wrap: anywhere;
+      border: 1px solid rgba(167, 139, 250, 0.18);
+      border-radius: 11px;
+      color: #eeeaff;
+      background: rgba(6, 6, 10, 0.72);
+      font-family: var(--mono);
+      font-size: clamp(14px, 2.05vw, 20px);
+      line-height: 1.55;
+    }
+
+    .copy-button {
+      min-width: 92px;
+      padding: 0 15px;
+      border-color: var(--line-strong);
+      background: rgba(255, 255, 255, 0.045);
+      font-size: 12px;
+    }
+
+    .copy-button:hover:not(:disabled) { border-color: rgba(167, 139, 250, 0.42); background: rgba(124, 58, 237, 0.11); }
+
+    .formula {
+      margin-top: 13px;
+      color: var(--muted-2);
+      font-family: var(--mono);
+      font-size: 10px;
+    }
+
+    .signing { padding: 98px 0; border-top: 1px solid var(--line); }
+
+    .sign-shell {
+      display: grid;
+      grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      overflow: hidden;
+      background: rgba(14, 15, 21, 0.84);
+    }
+
+    .sign-inputs { padding: 30px; border-right: 1px solid var(--line); }
+    .sign-output { padding: 30px; background: rgba(8, 9, 13, 0.43); }
+
+    .panel-label {
+      margin-bottom: 22px;
+      color: var(--muted-2);
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    label { display: block; margin-bottom: 7px; color: #c7c3d0; font-size: 12px; font-weight: 670; }
+
+    input, textarea {
+      width: 100%;
+      border: 1px solid var(--line-strong);
+      border-radius: 9px;
+      color: var(--text);
+      background: #090a0f;
+      transition: border-color 160ms ease, box-shadow 160ms ease;
+    }
+
+    input { height: 44px; padding: 0 13px; font-family: var(--mono); font-size: 12px; }
+    textarea { min-height: 112px; padding: 12px 13px; resize: vertical; font-size: 14px; line-height: 1.6; }
+    input:focus, textarea:focus { border-color: rgba(167, 139, 250, 0.54); }
+
+    .message-field { margin-top: 14px; }
+
+    .payload-preview {
+      margin: 16px 0;
+      padding: 11px 12px;
+      overflow-wrap: anywhere;
+      border-left: 2px solid var(--warm);
+      color: #c9c4d6;
+      background: rgba(244, 162, 97, 0.055);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .button-row { display: flex; flex-wrap: wrap; gap: 10px; }
+
+    .secondary-button {
+      padding: 0 17px;
+      border-color: var(--line-strong);
+      background: rgba(255, 255, 255, 0.045);
+      font-size: 13px;
+    }
+
+    .secondary-button.accent { border-color: transparent; background: var(--violet-deep); }
+
+    .signature-box {
+      min-height: 118px;
+      padding: 16px;
+      overflow-wrap: anywhere;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      color: #e2dcf7;
+      background: #090a0f;
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.75;
+    }
+
+    .signature-box.placeholder { color: #575762; }
+
+    .signature-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 11px;
+      color: var(--muted-2);
+      font-family: var(--mono);
+      font-size: 10px;
+    }
+
+    .verify-result {
+      display: flex;
+      align-items: center;
+      min-height: 48px;
+      margin-top: 21px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.02);
+      font-size: 12px;
+    }
+
+    .verify-result::before { content: ""; flex: none; width: 7px; height: 7px; margin-right: 9px; border-radius: 50%; background: #4a4b54; }
+    .verify-result.success { color: #b8f5df; border-color: rgba(70, 214, 167, 0.25); background: rgba(70, 214, 167, 0.055); }
+    .verify-result.success::before { background: var(--green); box-shadow: 0 0 8px rgba(70, 214, 167, 0.5); }
+    .verify-result.error { color: #ffc2c7; border-color: rgba(255, 107, 118, 0.25); background: rgba(255, 107, 118, 0.055); }
+    .verify-result.error::before { background: var(--red); }
+
+    .sign-explainer { margin: 22px 0 0; color: var(--muted); font-size: 12px; }
+    .sign-explainer code { color: var(--warm); font-family: var(--mono); }
+
+    .code-section { padding: 98px 0 112px; border-top: 1px solid var(--line); }
+
+    .code-window {
+      overflow: hidden;
+      border: 1px solid var(--line-strong);
+      border-radius: 18px;
+      background: #090a0f;
+      box-shadow: 0 28px 70px rgba(0, 0, 0, 0.28);
+    }
+
+    .code-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 53px;
+      padding: 0 12px 0 18px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      background: #101118;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .code-toolbar .copy-button { min-height: 34px; min-width: 80px; }
+
+    pre {
+      max-height: 590px;
+      margin: 0;
+      padding: 24px;
+      overflow: auto;
+      color: #cfc8e8;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.75;
+      tab-size: 2;
+    }
+
+    .privacy {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: center;
+      padding: 26px;
+      border: 1px solid rgba(70, 214, 167, 0.16);
+      border-radius: 17px;
+      background: rgba(70, 214, 167, 0.035);
+    }
+
+    .privacy-lock {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      border: 1px solid rgba(70, 214, 167, 0.25);
+      border-radius: 11px;
+      color: var(--green);
+      font-family: var(--mono);
+      font-size: 16px;
+    }
+
+    .privacy h3 { margin-bottom: 4px; font-size: 15px; }
+    .privacy p { margin: 0; color: var(--muted); font-size: 12px; }
+    .no-network { color: var(--green); font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
+
+    footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      min-height: 104px;
+      border-top: 1px solid var(--line);
+      color: var(--muted-2);
+      font-size: 12px;
+    }
+
+    footer strong { color: #b9b5c5; font-weight: 650; }
+    footer .mono { font-family: var(--mono); }
+
+    .toast {
+      position: fixed;
+      right: 22px;
+      bottom: 22px;
+      z-index: 20;
+      max-width: min(380px, calc(100% - 44px));
+      padding: 12px 15px;
+      border: 1px solid rgba(167, 139, 250, 0.28);
+      border-radius: 10px;
+      color: #eeeaff;
+      background: rgba(20, 17, 30, 0.96);
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
+      font-size: 12px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(10px);
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    @media (max-width: 900px) {
+      .hero { grid-template-columns: 1fr; min-height: auto; padding-top: 76px; }
+      .hero-copy { max-width: 760px; }
+      .hero-proof { width: min(520px, 100%); margin: 8px auto 0; transform: none; }
+      .learn-grid { grid-template-columns: 1fr; }
+      .learn-card { min-height: auto; }
+      .learn-index { margin-bottom: 22px; }
+      .sign-shell { grid-template-columns: 1fr; }
+      .sign-inputs { border-right: 0; border-bottom: 1px solid var(--line); }
+      .section-head { align-items: start; flex-direction: column; gap: 14px; }
+      .section-summary { max-width: 650px; }
+    }
+
+    @media (max-width: 620px) {
+      .container { width: min(100% - 24px, 1160px); }
+      .topbar { min-height: 62px; }
+      .top-meta > span:last-child { display: none; }
+      .hero { gap: 36px; padding: 62px 0 68px; }
+      h1 { font-size: clamp(39px, 14vw, 58px); }
+      .hero-copy { font-size: 16px; }
+      .primary-button { width: 100%; }
+      .proof-inner { min-height: 340px; padding: 18px; }
+      .learn { padding-bottom: 76px; }
+      .derivation, .signing, .code-section { padding: 74px 0; }
+      .step-card { grid-template-columns: 48px minmax(0, 1fr); }
+      .step-rail { padding: 20px 8px; }
+      .step-rail-label { display: none; }
+      .step-content { padding: 20px 16px 22px; }
+      .step-title-row { align-items: start; flex-direction: column; gap: 8px; }
+      .value-box { padding: 13px; font-size: 11px; }
+      .final-did-row { grid-template-columns: 1fr; }
+      .final-did { font-size: 13px; }
+      .final-did-row .copy-button { min-height: 45px; }
+      .sign-inputs, .sign-output { padding: 22px 18px; }
+      .field-grid { grid-template-columns: 1fr; }
+      .button-row > button { flex: 1; }
+      .signature-meta { align-items: start; flex-direction: column; }
+      pre { padding: 18px 16px; font-size: 10.5px; }
+      .privacy { grid-template-columns: auto 1fr; }
+      .no-network { grid-column: 2; }
+      footer { align-items: flex-start; flex-direction: column; justify-content: center; padding: 24px 0; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="container topbar">
+    <a class="brand" href="#top" aria-label="Technocore DID Playground 首页">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span>Technocore <span style="color:var(--muted);font-weight:500">/ DID Lab</span></span>
+    </a>
+    <div class="top-meta">
+      <span><span class="online-dot"></span>LOCAL ONLY</span>
+      <span>ED25519 · DID:KEY</span>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="container hero" aria-labelledby="page-title">
+      <div>
+        <p class="eyebrow">Identity, made inspectable</p>
+        <h1 id="page-title"><span class="gradient-text">Technocore DID</span><br>交互式演示</h1>
+        <p class="hero-copy">
+          在你的浏览器中生成一个真实的 Ed25519 身份，亲眼看见 32 字节公钥如何一步步变成 <code>did:key:z6Mk…</code>。
+          <span class="en">Generate a real Ed25519 identity in your browser and inspect every byte on its way to a did:key identifier.</span>
+        </p>
+        <button class="primary-button" id="generateButton" type="button">
+          <span id="generateLabel">生成身份 / Generate identity</span>
+          <span class="button-arrow" aria-hidden="true">→</span>
+        </button>
+        <div class="compat-note" id="compatibilityNotice" role="alert">
+          当前浏览器无法使用 Web Crypto Ed25519。请升级到最新版 Chrome、Edge、Firefox，或 Safari 17+；若直接打开文件仍受限，请通过 HTTPS 或 localhost 静态托管。
+          <span class="en">Web Crypto Ed25519 is unavailable here. Use a current Chrome, Edge, Firefox, or Safari 17+; if a local file is restricted, serve it over HTTPS or localhost.</span>
+        </div>
+      </div>
+
+      <aside class="hero-proof" aria-label="DID identity preview">
+        <div class="proof-inner">
+          <div class="window-bar">
+            <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span>identity.fragment</span>
+          </div>
+          <div class="fingerprint" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <p class="proof-label">Decentralized Identifier</p>
+          <p class="proof-did" id="heroDid">did:key:z6Mk••••••••••••••••••••••••••••••••••••••••••</p>
+          <div class="proof-footer">
+            <span>public / portable / self-owned</span>
+            <span class="proof-status" id="heroStatus">WAITING</span>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="container learn" aria-labelledby="learn-title">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">00 / Context</p>
+          <h2 id="learn-title">先理解，再生成</h2>
+        </div>
+        <p class="section-summary">DID 不是用户名，也不是某个平台里的账号。它把“我是谁”的证明放回密钥持有者手中。<span class="en">A DID is not a platform account; control comes from the key holder.</span></p>
+      </div>
+      <div class="learn-grid">
+        <article class="learn-card">
+          <span class="learn-index">01</span>
+          <h3>什么是 DID？</h3>
+          <p>去中心化标识符（Decentralized Identifier）是一种可验证、可移植的身份字符串。别人无需询问中心化账号系统，就能用它对应的公钥验证你的签名。</p>
+          <span class="en">A DID is a portable identifier whose public key lets anyone verify your signatures.</span>
+        </article>
+        <article class="learn-card">
+          <span class="learn-index">02</span>
+          <h3>为什么选择 did:key？</h3>
+          <p><code>did:key</code> 直接把带类型信息的公钥编码进 DID：无需链上交易、注册中心或网络查询。一个字符串就足以开始验证。</p>
+          <span class="en">did:key embeds the typed public key itself—no registry, blockchain transaction, or network lookup.</span>
+        </article>
+        <article class="learn-card">
+          <span class="learn-index">03</span>
+          <h3>Technocore 如何使用它？</h3>
+          <p>Technocore 让消息与 Ed25519 身份绑定。发送者签名，任何人都能用 DID 中的公钥核验消息确实来自同一身份。</p>
+          <span class="en">Technocore binds messages to an Ed25519 identity through verifiable signatures. Built by @flop_labs.</span>
+        </article>
+      </div>
+    </section>
+
+    <section class="derivation" aria-labelledby="derive-title">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">01 / Derivation pipeline</p>
+            <h2 id="derive-title">从公钥到 DID，逐字节展开</h2>
+          </div>
+          <p class="section-summary">所有值都来自你刚刚在本地生成的密钥。没有预设答案，也没有向服务器请求数据。<span class="en">Every value below comes from the key generated locally on this device.</span></p>
+        </div>
+
+        <div class="test-strip" aria-label="运行时检查">
+          <span class="test-chip" id="cryptoChip">WebCrypto · waiting</span>
+          <span class="test-chip" id="roundtripChip">base58 round-trip · checking</span>
+          <span class="test-chip" id="prefixChip">z6Mk prefix · waiting</span>
+        </div>
+
+        <div class="pipeline" aria-live="polite">
+          <article class="step-card" id="stepRaw">
+            <div class="step-rail"><span class="step-number">01</span><span class="step-rail-label">RAW KEY</span></div>
+            <div class="step-content">
+              <div class="step-title-row">
+                <h3>导出原始公钥 / Export raw public key</h3>
+                <span class="badge" id="rawBadge">32 bytes</span>
+              </div>
+              <p class="step-description">Ed25519 公钥固定为 32 字节；这里用十六进制显示，每两个字符代表一个字节。<span class="en">An Ed25519 public key is exactly 32 bytes; each pair of hex characters is one byte.</span></p>
+              <div class="value-box placeholder" id="rawValue">等待生成身份… / Waiting for identity…</div>
+            </div>
+          </article>
+
+          <article class="step-card" id="stepPrefix">
+            <div class="step-rail"><span class="step-number">02</span><span class="step-rail-label">MULTICODEC</span></div>
+            <div class="step-content">
+              <div class="step-title-row">
+                <h3>添加 multicodec 前缀 / Prepend multicodec</h3>
+                <span class="badge">0xED 0x01 · 34 bytes</span>
+              </div>
+              <p class="step-description"><code>ed01</code> 表示“后面的数据是 ed25519-pub”；前缀与 32 字节公钥合并为 34 字节。<span class="en">The bytes ed 01 identify the payload as an ed25519-pub key, producing 34 bytes total.</span></p>
+              <div class="value-box placeholder" id="prefixedValue"><span class="prefix-byte">ed01</span> + [32-byte public key]</div>
+            </div>
+          </article>
+
+          <article class="step-card" id="stepBase58">
+            <div class="step-rail"><span class="step-number">03</span><span class="step-rail-label">BASE58BTC</span></div>
+            <div class="step-content">
+              <div class="step-title-row">
+                <h3>编码为 base58btc / Encode as base58btc</h3>
+                <span class="badge">Bitcoin alphabet</span>
+              </div>
+              <p class="step-description">用 Bitcoin base58 字母表编码 34 字节，避开容易混淆的 0、O、I、l；前导零字节会保留为字符 “1”。<span class="en">Bitcoin base58 avoids ambiguous characters and preserves each leading zero byte as “1”.</span></p>
+              <div class="value-box placeholder" id="base58Value">等待 34 字节输入… / Waiting for 34-byte input…</div>
+            </div>
+          </article>
+
+          <article class="step-card final-card" id="stepDid">
+            <div class="step-rail"><span class="step-number">04</span><span class="step-rail-label">FINAL DID</span></div>
+            <div class="step-content">
+              <div class="step-title-row">
+                <h3>加上 multibase 与方法名 / Add multibase &amp; method</h3>
+                <span class="badge">did:key:z6Mk…</span>
+              </div>
+              <p class="step-description">字符 <code>z</code> 声明后面使用 base58btc；再加上 <code>did:key:</code>，得到最终身份。<span class="en">“z” declares base58btc; “did:key:” turns the encoded key into the final identifier.</span></p>
+              <div class="final-did-row">
+                <div class="final-did" id="finalDid">did:key:z6Mk…</div>
+                <button class="copy-button" id="copyDidButton" type="button" disabled>复制 / Copy</button>
+              </div>
+              <div class="formula">did:key: + z + base58btc(ed01 + raw_public_key_32bytes)</div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="signing" aria-labelledby="sign-title">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">02 / Sign &amp; verify</p>
+            <h2 id="sign-title">让身份真正说话</h2>
+          </div>
+          <p class="section-summary">签名不是加密消息，而是证明“持有这把私钥的人认可这段确切内容”。改动任何一个字符，验证都会失败。<span class="en">A signature proves the key holder approved these exact bytes; one changed character breaks verification.</span></p>
+        </div>
+
+        <div class="sign-shell">
+          <div class="sign-inputs">
+            <p class="panel-label">Payload builder / 构造待签名内容</p>
+            <div class="field-grid">
+              <div>
+                <label for="roomInput">房间 / room</label>
+                <input id="roomInput" type="text" value="lobby" autocomplete="off" spellcheck="false">
+              </div>
+              <div>
+                <label for="nonceInput">随机数 / nonce</label>
+                <input id="nonceInput" type="text" value="demo-001" autocomplete="off" spellcheck="false">
+              </div>
+            </div>
+            <div class="message-field">
+              <label for="messageInput">消息 / message text</label>
+              <textarea id="messageInput" spellcheck="true">你好，Technocore！</textarea>
+            </div>
+            <div class="payload-preview" id="payloadPreview">lobby|demo-001|你好，Technocore！</div>
+            <div class="button-row">
+              <button class="secondary-button accent" id="signButton" type="button" disabled>签名 / Sign</button>
+              <button class="secondary-button" id="verifyButton" type="button" disabled>验证 / Verify</button>
+            </div>
+          </div>
+
+          <div class="sign-output">
+            <p class="panel-label">Ed25519 signature / 签名输出</p>
+            <div class="signature-box placeholder" id="signatureValue">请先生成身份，然后签名消息。<br>Please generate an identity, then sign the message.</div>
+            <div class="signature-meta">
+              <span id="signatureLength">base64url · unpadded · — chars</span>
+              <button class="copy-button" id="copySignatureButton" type="button" disabled>复制签名</button>
+            </div>
+            <div class="verify-result" id="verifyResult" role="status">等待验证 / Verification pending</div>
+            <p class="sign-explainer">Technocore 签署精确的 UTF-8 载荷 <code>room|nonce|text</code>。本演示会把上面三个字段拼接后签名。<span class="en">Technocore signs the exact UTF-8 payload room|nonce|text; the three fields above are joined before signing.</span></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="code-section" aria-labelledby="code-title">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">03 / Reuse the code</p>
+            <h2 id="code-title">复制正确的推导实现</h2>
+          </div>
+          <p class="section-summary">这段代码与本页实际调用的函数相同：保留前导零、检查公钥长度，并拒绝错误的 DID 前缀。<span class="en">The exact functions used by this page, ready to paste into a browser project.</span></p>
+        </div>
+        <div class="code-window">
+          <div class="code-toolbar">
+            <span>did-key.js · no dependencies</span>
+            <button class="copy-button" id="copyCodeButton" type="button">复制代码</button>
+          </div>
+          <pre><code id="codeSnippet"></code></pre>
+        </div>
+
+        <div class="privacy" style="margin-top:18px">
+          <div class="privacy-lock" aria-hidden="true">◆</div>
+          <div>
+            <h3>隐私说明 / Privacy</h3>
+            <p>密钥生成、DID 推导、签名与验证全部在浏览器内存中完成。本页不发出网络请求，不上传数据，也不保存或导出私钥；刷新页面后本次身份会消失。</p>
+            <span class="en">Keys, derivation, signing, and verification stay in browser memory. No network requests, uploads, persistence, or private-key export; reloading discards this identity.</span>
+          </div>
+          <span class="no-network">0 network calls</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="container">
+    <span><strong>Technocore</strong> is by <strong>@flop_labs</strong> · Built for the Chinese community.</span>
+    <span class="mono">ED25519 / MULTICODEC 0xED01 / BASE58BTC</span>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    "use strict";
+
+    const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    const ED25519_PUB_MULTICODEC = Uint8Array.of(0xed, 0x01);
+
+    function base58btcEncode(data) {
+      const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+      if (bytes.length === 0) return "";
+
+      const digits = [0];
+      for (const byte of bytes) {
+        let carry = byte;
+        for (let i = 0; i < digits.length; i += 1) {
+          const value = digits[i] * 256 + carry;
+          digits[i] = value % 58;
+          carry = Math.floor(value / 58);
+        }
+        while (carry > 0) {
+          digits.push(carry % 58);
+          carry = Math.floor(carry / 58);
+        }
+      }
+
+      let encoded = "";
+      for (let i = 0; i < bytes.length - 1 && bytes[i] === 0; i += 1) {
+        encoded += "1";
+      }
+      for (let i = digits.length - 1; i >= 0; i -= 1) {
+        encoded += BASE58_ALPHABET[digits[i]];
+      }
+      return encoded;
+    }
+
+    function deriveDidFromPublicKey(rawPublicKey) {
+      const raw = rawPublicKey instanceof Uint8Array
+        ? rawPublicKey
+        : new Uint8Array(rawPublicKey);
+      if (raw.length !== 32) {
+        throw new Error("Ed25519 public key must be exactly 32 bytes.");
+      }
+
+      const prefixed = new Uint8Array(ED25519_PUB_MULTICODEC.length + raw.length);
+      prefixed.set(ED25519_PUB_MULTICODEC, 0);
+      prefixed.set(raw, ED25519_PUB_MULTICODEC.length);
+      const base58 = base58btcEncode(prefixed);
+      const did = `did:key:z${base58}`;
+
+      if (!did.startsWith("did:key:z6Mk")) {
+        throw new Error("Invalid Ed25519 did:key prefix.");
+      }
+      return { did, base58, prefixed };
+    }
+
+    function base58btcDecode(text) {
+      if (text === "") return new Uint8Array();
+      const bytes = [0];
+      for (const character of text) {
+        const digit = BASE58_ALPHABET.indexOf(character);
+        if (digit < 0) throw new Error("Invalid base58btc character.");
+        let carry = digit;
+        for (let i = 0; i < bytes.length; i += 1) {
+          const value = bytes[i] * 58 + carry;
+          bytes[i] = value & 0xff;
+          carry = value >>> 8;
+        }
+        while (carry > 0) {
+          bytes.push(carry & 0xff);
+          carry >>>= 8;
+        }
+      }
+
+      let leadingZeroes = 0;
+      while (leadingZeroes < text.length - 1 && text[leadingZeroes] === "1") {
+        leadingZeroes += 1;
+      }
+      const decoded = new Uint8Array(leadingZeroes + bytes.length);
+      for (let i = 0; i < bytes.length; i += 1) {
+        decoded[decoded.length - 1 - i] = bytes[i];
+      }
+      return decoded;
+    }
+
+    const elements = {
+      generateButton: document.querySelector("#generateButton"),
+      generateLabel: document.querySelector("#generateLabel"),
+      compatibilityNotice: document.querySelector("#compatibilityNotice"),
+      heroDid: document.querySelector("#heroDid"),
+      heroStatus: document.querySelector("#heroStatus"),
+      cryptoChip: document.querySelector("#cryptoChip"),
+      roundtripChip: document.querySelector("#roundtripChip"),
+      prefixChip: document.querySelector("#prefixChip"),
+      rawValue: document.querySelector("#rawValue"),
+      prefixedValue: document.querySelector("#prefixedValue"),
+      base58Value: document.querySelector("#base58Value"),
+      finalDid: document.querySelector("#finalDid"),
+      copyDidButton: document.querySelector("#copyDidButton"),
+      signButton: document.querySelector("#signButton"),
+      verifyButton: document.querySelector("#verifyButton"),
+      roomInput: document.querySelector("#roomInput"),
+      nonceInput: document.querySelector("#nonceInput"),
+      messageInput: document.querySelector("#messageInput"),
+      payloadPreview: document.querySelector("#payloadPreview"),
+      signatureValue: document.querySelector("#signatureValue"),
+      signatureLength: document.querySelector("#signatureLength"),
+      copySignatureButton: document.querySelector("#copySignatureButton"),
+      verifyResult: document.querySelector("#verifyResult"),
+      codeSnippet: document.querySelector("#codeSnippet"),
+      copyCodeButton: document.querySelector("#copyCodeButton"),
+      toast: document.querySelector("#toast")
+    };
+
+    const state = {
+      keyPair: null,
+      publicKeyBytes: null,
+      did: "",
+      signature: null,
+      signedPayload: ""
+    };
+
+    function bytesToHex(bytes) {
+      return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    }
+
+    function bytesEqual(left, right) {
+      if (left.length !== right.length) return false;
+      let difference = 0;
+      for (let i = 0; i < left.length; i += 1) difference |= left[i] ^ right[i];
+      return difference === 0;
+    }
+
+    function toBase64Url(bytes) {
+      let binary = "";
+      for (const byte of bytes) binary += String.fromCharCode(byte);
+      return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+    }
+
+    function currentPayload() {
+      return `${elements.roomInput.value}|${elements.nonceInput.value}|${elements.messageInput.value}`;
+    }
+
+    function updatePayloadPreview() {
+      elements.payloadPreview.textContent = currentPayload();
+      if (state.signature) {
+        const changed = currentPayload() !== state.signedPayload;
+        elements.verifyResult.className = "verify-result";
+        elements.verifyResult.textContent = changed
+          ? "内容已改变；用当前载荷验证将失败 / Payload changed; current verification will fail"
+          : "签名已生成，等待验证 / Signature ready; verification pending";
+      }
+    }
+
+    function setChip(element, status, text) {
+      element.className = `test-chip ${status}`;
+      element.textContent = text;
+    }
+
+    function setStepReady(id) {
+      document.querySelector(id).classList.add("ready");
+    }
+
+    function setVerifyResult(status, text) {
+      elements.verifyResult.className = `verify-result ${status}`;
+      elements.verifyResult.textContent = text;
+    }
+
+    let toastTimer;
+    function showToast(message) {
+      window.clearTimeout(toastTimer);
+      elements.toast.textContent = message;
+      elements.toast.classList.add("show");
+      toastTimer = window.setTimeout(() => elements.toast.classList.remove("show"), 1800);
+    }
+
+    async function copyText(text, button) {
+      if (!text) return;
+      let copied = false;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          copied = true;
+        } catch (_) {
+          copied = false;
+        }
+      }
+      if (!copied) {
+        const fallback = document.createElement("textarea");
+        fallback.value = text;
+        fallback.setAttribute("readonly", "");
+        fallback.style.position = "fixed";
+        fallback.style.opacity = "0";
+        document.body.appendChild(fallback);
+        fallback.select();
+        copied = document.execCommand("copy");
+        fallback.remove();
+      }
+      if (copied) {
+        const original = button.textContent;
+        button.textContent = "已复制 ✓";
+        showToast("已复制到剪贴板 / Copied to clipboard");
+        window.setTimeout(() => { button.textContent = original; }, 1400);
+      } else {
+        showToast("浏览器阻止了复制，请手动选择文本 / Copy was blocked");
+      }
+    }
+
+    function resetSignature() {
+      state.signature = null;
+      state.signedPayload = "";
+      elements.signatureValue.className = "signature-box placeholder";
+      elements.signatureValue.innerHTML = "请签名一条消息。<br>Please sign a message.";
+      elements.signatureLength.textContent = "base64url · unpadded · — chars";
+      elements.copySignatureButton.disabled = true;
+      elements.verifyButton.disabled = true;
+      setVerifyResult("", "等待签名 / Waiting for a signature");
+    }
+
+    function runBase58RoundTripTest() {
+      const vectors = [
+        new Uint8Array(),
+        Uint8Array.of(0),
+        Uint8Array.of(0, 0, 1, 2, 3),
+        Uint8Array.of(0xed, 0x01, ...new Uint8Array(32).fill(0xab)),
+        Uint8Array.of(255, 254, 128, 64, 1, 0)
+      ];
+      return vectors.every((vector) => bytesEqual(base58btcDecode(base58btcEncode(vector)), vector));
+    }
+
+    async function generateIdentity() {
+      if (!window.crypto || !window.crypto.subtle) {
+        elements.compatibilityNotice.classList.add("visible");
+        setChip(elements.cryptoChip, "fail", "WebCrypto · unavailable");
+        return;
+      }
+
+      elements.generateButton.disabled = true;
+      elements.generateButton.setAttribute("aria-busy", "true");
+      elements.generateLabel.textContent = "正在生成… / Generating…";
+      elements.compatibilityNotice.classList.remove("visible");
+
+      try {
+        const keyPair = await window.crypto.subtle.generateKey(
+          { name: "Ed25519" },
+          true,
+          ["sign", "verify"]
+        );
+        const raw = new Uint8Array(await window.crypto.subtle.exportKey("raw", keyPair.publicKey));
+        if (raw.length !== 32) throw new Error("Unexpected Ed25519 public key length.");
+
+        const derived = deriveDidFromPublicKey(raw);
+        const decoded = base58btcDecode(derived.base58);
+        if (!bytesEqual(decoded, derived.prefixed)) throw new Error("base58btc round-trip failed.");
+
+        state.keyPair = keyPair;
+        state.publicKeyBytes = raw;
+        state.did = derived.did;
+
+        elements.rawValue.textContent = bytesToHex(raw);
+        elements.rawValue.classList.remove("placeholder");
+        elements.prefixedValue.innerHTML = `<span class="prefix-byte">ed01</span>${bytesToHex(raw)}`;
+        elements.prefixedValue.classList.remove("placeholder");
+        elements.base58Value.textContent = derived.base58;
+        elements.base58Value.classList.remove("placeholder");
+        elements.finalDid.textContent = derived.did;
+        elements.heroDid.textContent = derived.did;
+        elements.heroStatus.textContent = "ACTIVE";
+
+        ["#stepRaw", "#stepPrefix", "#stepBase58", "#stepDid"].forEach(setStepReady);
+        setChip(elements.cryptoChip, "pass", "WebCrypto Ed25519 · ready");
+        setChip(elements.prefixChip, "pass", "z6Mk prefix · valid");
+
+        elements.copyDidButton.disabled = false;
+        elements.signButton.disabled = false;
+        resetSignature();
+        showToast("新身份已在本地生成 / New local identity generated");
+      } catch (error) {
+        const unsupported = error && (error.name === "NotSupportedError" || error.name === "OperationError");
+        if (unsupported) {
+          elements.compatibilityNotice.classList.add("visible");
+          setChip(elements.cryptoChip, "fail", "WebCrypto Ed25519 · unsupported");
+        } else {
+          setChip(elements.cryptoChip, "fail", "Identity generation · failed");
+          showToast("生成失败，请查看兼容性提示 / Generation failed");
+        }
+      } finally {
+        elements.generateButton.disabled = false;
+        elements.generateButton.removeAttribute("aria-busy");
+        elements.generateLabel.textContent = state.keyPair
+          ? "重新生成 / Regenerate identity"
+          : "生成身份 / Generate identity";
+      }
+    }
+
+    async function signMessage() {
+      if (!state.keyPair) return;
+      const payload = currentPayload();
+      const payloadBytes = new TextEncoder().encode(payload);
+      try {
+        const signatureBuffer = await window.crypto.subtle.sign(
+          "Ed25519",
+          state.keyPair.privateKey,
+          payloadBytes
+        );
+        const signature = new Uint8Array(signatureBuffer);
+        const encoded = toBase64Url(signature);
+        if (signature.length !== 64 || encoded.length !== 86 || encoded.includes("=")) {
+          throw new Error("Unexpected Ed25519 signature encoding.");
+        }
+        state.signature = signature;
+        state.signedPayload = payload;
+        elements.signatureValue.textContent = encoded;
+        elements.signatureValue.classList.remove("placeholder");
+        elements.signatureLength.textContent = `base64url · unpadded · ${encoded.length} chars`;
+        elements.copySignatureButton.disabled = false;
+        elements.verifyButton.disabled = false;
+        setVerifyResult("", "签名完成，点击验证 / Signed; click Verify");
+      } catch (_) {
+        setVerifyResult("error", "签名失败 / Signing failed");
+      }
+    }
+
+    async function verifySignature() {
+      if (!state.keyPair || !state.signature) return;
+      try {
+        const valid = await window.crypto.subtle.verify(
+          "Ed25519",
+          state.keyPair.publicKey,
+          state.signature,
+          new TextEncoder().encode(currentPayload())
+        );
+        if (valid) {
+          setVerifyResult("success", "✓ 验证成功：签名与公钥、载荷完全匹配 / Verified successfully");
+        } else {
+          setVerifyResult("error", "✕ 验证失败：载荷可能已改变 / Verification failed: payload changed");
+        }
+      } catch (_) {
+        setVerifyResult("error", "验证过程失败 / Verification error");
+      }
+    }
+
+    const developerSnippet = `const BASE58_ALPHABET = ${JSON.stringify(BASE58_ALPHABET)};
+const ED25519_PUB_MULTICODEC = Uint8Array.of(0xed, 0x01);
+
+${base58btcEncode.toString()}
+
+${deriveDidFromPublicKey.toString()}
+
+// Browser usage:
+const keyPair = await crypto.subtle.generateKey(
+  { name: "Ed25519" }, true, ["sign", "verify"]
+);
+const rawPublicKey = new Uint8Array(
+  await crypto.subtle.exportKey("raw", keyPair.publicKey)
+);
+const { did } = deriveDidFromPublicKey(rawPublicKey);
+console.log(did); // always did:key:z6Mk...`;
+
+    elements.codeSnippet.textContent = developerSnippet;
+    elements.generateButton.addEventListener("click", generateIdentity);
+    elements.signButton.addEventListener("click", signMessage);
+    elements.verifyButton.addEventListener("click", verifySignature);
+    elements.copyDidButton.addEventListener("click", () => copyText(state.did, elements.copyDidButton));
+    elements.copySignatureButton.addEventListener("click", () => copyText(elements.signatureValue.textContent, elements.copySignatureButton));
+    elements.copyCodeButton.addEventListener("click", () => copyText(developerSnippet, elements.copyCodeButton));
+    [elements.roomInput, elements.nonceInput, elements.messageInput].forEach((input) => {
+      input.addEventListener("input", updatePayloadPreview);
+    });
+
+    const roundTripOk = runBase58RoundTripTest();
+    setChip(
+      elements.roundtripChip,
+      roundTripOk ? "pass" : "fail",
+      roundTripOk ? "base58 round-trip · pass" : "base58 round-trip · fail"
+    );
+    if (!window.crypto || !window.crypto.subtle) {
+      elements.compatibilityNotice.classList.add("visible");
+      elements.generateButton.disabled = true;
+      setChip(elements.cryptoChip, "fail", "WebCrypto · unavailable");
+    }
+  </script>
+</body>
+</html>
